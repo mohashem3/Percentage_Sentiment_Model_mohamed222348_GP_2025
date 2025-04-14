@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import joblib
 import numpy as np
@@ -8,16 +9,30 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import nltk
 
-# Download required resources
+# ===== Download required NLTK resources =====
 nltk.download('punkt')
 nltk.download('stopwords')
 nltk.download('wordnet')
-nltk.download('punkt_tab')  # Important based on your preprocessing
-# Load components
+nltk.download('punkt_tab')  # Optional, keep if needed by your tokenizer
+
+# ===== Load model components =====
 model = joblib.load("model/svm_model.joblib")
 vectorizer = joblib.load("model/tfidf_vectorizer.joblib")
 ratios = joblib.load("model/nb_ratios.joblib")
 
+# ===== FastAPI setup =====
+app = FastAPI()
+
+# ===== CORS setup for Vue frontend =====
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Replace with frontend URL for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ===== Preprocessing setup =====
 stop_words_set = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
@@ -37,6 +52,7 @@ def clean_text(text):
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
+# ===== Prediction Logic =====
 def predict_sentiment(text):
     cleaned = clean_text(text)
     tfidf = vectorizer.transform([cleaned])
@@ -47,9 +63,7 @@ def predict_sentiment(text):
     percentage = round(prob * 100 if label == "positive" else (1 - prob) * 100)
     return {"sentiment": label, "confidence": percentage}
 
-# FastAPI setup
-app = FastAPI()
-
+# ===== Request schema & endpoint =====
 class ReviewInput(BaseModel):
     text: str
 
