@@ -8,9 +8,9 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
 # Load components
-model = joblib.load("models/svm_model.joblib")
-vectorizer = joblib.load("models/tfidf_vectorizer.joblib")
-ratios = joblib.load("models/nb_ratios.joblib")
+model = joblib.load("model/svm_model.joblib")
+vectorizer = joblib.load("model/tfidf_vectorizer.joblib")
+ratios = joblib.load("model/nb_ratios.joblib")
 
 stop_words_set = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
