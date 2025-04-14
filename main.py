@@ -6,7 +6,13 @@ import re
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+import nltk
 
+# Download required resources
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('wordnet')
+nltk.download('punkt_tab')  # Important based on your preprocessing
 # Load components
 model = joblib.load("model/svm_model.joblib")
 vectorizer = joblib.load("model/tfidf_vectorizer.joblib")
