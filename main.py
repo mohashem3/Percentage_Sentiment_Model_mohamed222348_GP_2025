@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List
 import joblib
 import numpy as np
 import re
@@ -8,12 +9,13 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import nltk
+from transformers import pipeline
 
 # ===== Download required NLTK resources =====
 nltk.download('punkt')
 nltk.download('stopwords')
 nltk.download('wordnet')
-nltk.download('punkt_tab')  # Optional, keep if needed by your tokenizer
+nltk.download('punkt_tab')  # Optional
 
 # ===== Load model components =====
 model = joblib.load("model/svm_model.joblib")
@@ -71,3 +73,24 @@ class ReviewInput(BaseModel):
 def predict(data: ReviewInput):
     result = predict_sentiment(data.text)
     return result
+
+# ===== Summarization Setup =====
+summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+
+class ReviewList(BaseModel):
+    reviews: List[str]
+
+@app.post("/summarize")
+def summarize_reviews(data: ReviewList):
+    reviews = data.reviews
+
+    if not reviews:
+        return {"summary": "No reviews provided."}
+
+    combined_text = " ".join(reviews)
+
+    if len(combined_text.split()) < 30:
+        return {"summary": combined_text}  # Not enough content for summarization
+
+    result = summarizer(combined_text, max_length=100, min_length=30, do_sample=False)
+    return {"summary": result[0]["summary_text"]}
