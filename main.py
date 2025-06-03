@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
@@ -9,7 +9,17 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import nltk
-from transformers import pipeline
+import os
+from dotenv import load_dotenv
+
+# New OpenAI SDK import style
+from openai import OpenAI
+
+# Load environment variables from .env
+load_dotenv()
+
+# Initialize OpenAI client with API key
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ===== Download required NLTK resources =====
 nltk.download('punkt')
@@ -74,23 +84,66 @@ def predict(data: ReviewInput):
     result = predict_sentiment(data.text)
     return result
 
-# ===== Summarization Setup =====
-summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-
+# ===== GPT-3.5 Summarization Setup =====
 class ReviewList(BaseModel):
     reviews: List[str]
 
 @app.post("/summarize")
 def summarize_reviews(data: ReviewList):
-    reviews = data.reviews
+    try:
+        reviews = data.reviews
+        if not reviews:
+            return {"summary": "No reviews provided."}
+        combined_text = " ".join(reviews)
+        if len(combined_text.split()) < 30:
+            return {
+                "summary": combined_text,
+                "tone": "undetermined",
+                "positives": [],
+                "negatives": []
+            }
 
-    if not reviews:
-        return {"summary": "No reviews provided."}
+        # Use GPT to return structured summary
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an assistant that summarizes user-submitted movie reviews into a paragraph and extracts key insights."
+                },
+                {
+                    "role": "user",
+                    "content": f"""
+The following are user-submitted reviews for a movie:
 
-    combined_text = " ".join(reviews)
+{combined_text}
 
-    if len(combined_text.split()) < 30:
-        return {"summary": combined_text}  # Not enough content for summarization
+Please do the following:
+1. Write a natural, informative summary paragraph that reflects the reviews.
+2. Clearly state the overall tone (positive, negative, or mixed).
+3. List the main positive points users mentioned.
+4. List the common criticisms or negative points.
 
-    result = summarizer(combined_text, max_length=100, min_length=30, do_sample=False)
-    return {"summary": result[0]["summary_text"]}
+Respond in this exact JSON format:
+{{
+  "summary": "<your paragraph summary>",
+  "tone": "<overall tone>",
+  "positives": ["<positive point 1>", "<positive point 2>", "..."],
+  "negatives": ["<negative point 1>", "<negative point 2>", "..."]
+}}
+"""
+                }
+            ],
+            max_tokens=300,
+            temperature=0.5,
+        )
+
+        response_text = response.choices[0].message.content.strip()
+
+        import json
+        parsed = json.loads(response_text)
+        return parsed
+
+    except Exception as e:
+        print(f"Error in /summarize: {e}")
+        raise HTTPException(status_code=500, detail="Error generating summary.")
